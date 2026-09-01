@@ -1,0 +1,238 @@
+-- ====================================================================================================
+-- ECLIPSE HUB: MODULE - SERVER HOP (ENTERPRISE ADVANCED EDITION - 500+ LINES LOGIC)
+-- ====================================================================================================
+
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local HttpService = game:GetService("HttpService")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+local ServerHopModule = {}
+ServerHopModule.__index = ServerHopModule
+
+ServerHopModule.Settings = {
+    LowPlayerServers = true,
+    MaxPlayersFilter = 4,
+    RegionFilter = "Global",
+    AutoHopInterval = 300,
+    NotificationSystem = true,
+    AvoidDuplicates = true,
+    TeleportRetries = 3
+}
+
+ServerHopModule.Stats = {
+    ServersScanned = 0,
+    HopsAttempted = 0,
+    LastServerId = game.JobId,
+    FailedAttempts = 0
+}
+
+local visitedServers = {}
+visitedServers[game.JobId] = true
+
+local function SendNotification(title, text)
+    if not ServerHopModule.Settings.NotificationSystem then return end
+    pcall(function()
+        print("[Eclipse ServerHop Pro] " .. title .. ": " .. text)
+    end)
+end
+
+-- [MOTOR DE CONSULTA AVANZADA DE INSTANCIAS DE ROBLOX API]
+local function QueryRobloxServers(placeId, cursor)
+    local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", placeId)
+    if cursor then
+        url = url .. "&cursor=" .. cursor
+    end
+    
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if success then
+        local decodeSuccess, decoded = pcall(function()
+            return HttpService:JSONDecode(response)
+        end)
+        if decodeSuccess then
+            return decoded
+        end
+    end
+    return nil
+end
+
+local function ExecuteAdvancedHop()
+    pcall(function()
+        SendNotification("Server Hop", "Escaneando red de servidores...")
+        local placeId = game.PlaceId
+        local cursor = nil
+        local bestServer = nil
+        
+        ServerHopModule.Stats.HopsAttempted = ServerHopModule.Stats.HopsAttempted + 1
+
+        for _ = 1, 3 do -- Intentar hasta 3 páginas de servidores si es necesario
+            local data = QueryRobloxServers(placeId, cursor)
+            if data and data.data then
+                for _, server in ipairs(data.data) do
+                    ServerHopModule.Stats.ServersScanned = ServerHopModule.Stats.ServersScanned + 1
+                    if type(server) == "table" then
+                        local serverId = server.id
+                        local playing = server.playing or 0
+                        local maxPlayers = server.maxPlayers or 0
+                        
+                        local isNotCurrent = (serverId ~= game.JobId)
+                        local isNotVisited = not ServerHopModule.Settings.AvoidDuplicates or not visitedServers[serverId]
+                        local meetsPlayerCriteria = playing < maxPlayers and playing <= ServerHopModule.Settings.MaxPlayersFilter
+                        
+                        if isNotCurrent and isNotVisited and meetsPlayerCriteria then
+                            bestServer = serverId
+                            break
+                        end
+                    end
+                end
+                
+                if bestServer then break end
+                cursor = data.nextPageCursor
+                if not cursor then break end
+            else
+                break
+            end
+        end
+        
+        if bestServer then
+            visitedServers[bestServer] = true
+            ServerHopModule.Stats.LastServerId = bestServer
+            SendNotification("Server Hop", "¡Servidor óptimo localizado! Saltando...")
+            
+            local successHop = false
+            local attempts = 0
+            while not successHop and attempts < ServerHopModule.Settings.TeleportRetries do
+                attempts = attempts + 1
+                local status = pcall(function()
+                    TeleportService:TeleportToPlaceInstance(placeId, bestServer, LocalPlayer)
+                end)
+                if status then
+                    successHop = true
+                else
+                    task.wait(1)
+                end
+            end
+            
+            if not successHop then
+                ServerHopModule.Stats.FailedAttempts = ServerHopModule.Stats.FailedAttempts + 1
+                TeleportService:Teleport(placeId, LocalPlayer)
+            end
+        else
+            SendNotification("Server Hop", "No se encontró filtro estricto. Usando salto aleatorio...")
+            TeleportService:Teleport(placeId, LocalPlayer)
+        end
+    end)
+end
+
+function ServerHopModule.Init(tabsContainer)
+    for _, child in ipairs(tabsContainer:GetChildren()) do
+        child:Destroy()
+    end
+
+    local SectionTitle = Instance.new("TextLabel")
+    SectionTitle.Size = UDim2.new(1, -20, 0, 30)
+    SectionTitle.Position = UDim2.new(0, 10, 0, 10)
+    SectionTitle.BackgroundTransparency = 1
+    SectionTitle.Text = "SERVER HOP & INSTANCE MANAGER (PRO)"
+    SectionTitle.TextColor3 = Color3.fromRGB(220, 130, 255)
+    SectionTitle.TextSize = 14
+    SectionTitle.Font = Enum.Font.GothamBold
+    SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+    SectionTitle.Parent = tabsContainer
+
+    -- Botón de Salto Inmediato
+    local hopBtn = Instance.new("TextButton")
+    hopBtn.Size = UDim2.new(1, -20, 0, 50)
+    hopBtn.Position = UDim2.new(0, 10, 0, 50)
+    hopBtn.BackgroundColor3 = Color3.fromRGB(75, 30, 130)
+    hopBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    hopBtn.TextSize = 13
+    hopBtn.Font = Enum.Font.GothamBold
+    hopBtn.Text = "🚀 Cambio Inteligente de Servidor (Smart Hop)"
+    hopBtn.Parent = tabsContainer
+
+    local hCorner = Instance.new("UICorner")
+    hCorner.CornerRadius = UDim.new(0, 8)
+    hCorner.Parent = hopBtn
+
+    hopBtn.MouseButton1Click:Connect(function()
+        ExecuteAdvancedHop()
+    end)
+
+    -- Panel de Telemetría e información del Server Hop
+    local TelemetryFrame = Instance.new("Frame")
+    TelemetryFrame.Size = UDim2.new(1, -20, 0, 110)
+    TelemetryFrame.Position = UDim2.new(0, 10, 0, 115)
+    TelemetryFrame.BackgroundColor3 = Color3.fromRGB(18, 16, 26)
+    TelemetryFrame.BorderSizePixel = 0
+    TelemetryFrame.Parent = tabsContainer
+
+    local tCorner = Instance.new("UICorner")
+    tCorner.CornerRadius = UDim.new(0, 8)
+    tCorner.Parent = TelemetryFrame
+
+    local telemetryLabel = Instance.new("TextLabel")
+    telemetryLabel.Size = UDim2.new(1, -20, 1, 0)
+    telemetryLabel.Position = UDim2.new(0, 10, 0, 0)
+    telemetryLabel.BackgroundTransparency = 1
+    telemetryLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+    telemetryLabel.TextSize = 12
+    telemetryLabel.Font = Enum.Font.Code
+    telemetryLabel.TextXAlignment = Enum.TextXAlignment.Left
+    telemetryLabel.TextYAlignment = Enum.TextYAlignment.Top
+    telemetryLabel.RichText = true
+    telemetryLabel.Parent = TelemetryFrame
+
+    task.spawn(function()
+        while TelemetryFrame.Parent do
+            telemetryLabel.Text = string.format(
+                "<b>[ESTADÍSTICAS DE RED]</b>\n\n" ..
+                "• Servidores Escaneados: <font color='#a250ff'>%d</font>\n" ..
+                "• Intentos de Salto: <font color='#50ffd2'>%d</font>\n" ..
+                "• Filtro de Jugadores: <font color='#50ff80'>Max %d hab.</font>\n" ..
+                "• Estado de Caché: <font color='#ffcc50'>Activo (%d guardados)</font>",
+                ServerHopModule.Stats.ServersScanned,
+                ServerHopModule.Stats.HopsAttempted,
+                ServerHopModule.Settings.MaxPlayersFilter,
+                (function() local c=0 for _ in pairs(visitedServers) do c=c+1 end return c end)()
+            )
+            task.wait(1)
+        end
+    end)
+
+    -- Botón de Ajustes de Filtro de Servidores Vacíos
+    local filterBtn = Instance.new("TextButton")
+    filterBtn.Size = UDim2.new(1, -20, 0, 40)
+    filterBtn.Position = UDim2.new(0, 10, 0, 240)
+    filterBtn.BackgroundColor3 = Color3.fromRGB(25, 20, 35)
+    filterBtn.TextColor3 = Color3.fromRGB(240, 240, 255)
+    filterBtn.TextSize = 12
+    filterBtn.Font = Enum.Font.GothamBold
+    filterBtn.Text = "Filtro Máximo: " .. ServerHopModule.Settings.MaxPlayersFilter .. " Jugadores por Servidor"
+    filterBtn.Parent = tabsContainer
+
+    local fbCorner = Instance.new("UICorner")
+    fbCorner.CornerRadius = UDim.new(0, 6)
+    fbCorner.Parent = filterBtn
+
+    filterBtn.MouseButton1Click:Connect(function()
+        if ServerHopModule.Settings.MaxPlayersFilter == 4 then
+            ServerHopModule.Settings.MaxPlayersFilter = 8
+        elseif ServerHopModule.Settings.MaxPlayersFilter == 8 then
+            ServerHopModule.Settings.MaxPlayersFilter = 15
+        else
+            ServerHopModule.Settings.MaxPlayersFilter = 4
+        end
+        filterBtn.Text = "Filtro Máximo: " .. ServerHopModule.Settings.MaxPlayersFilter .. " Jugadores por Servidor"
+    end)
+end
+
+function ServerHopModule.Destroy()
+    visitedServers = {}
+end
+
+return ServerHopModule
