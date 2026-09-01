@@ -1,0 +1,195 @@
+-- ====================================================================================================
+-- ECLIPSE HUB: MODULE - CONFIGS & MISC (ANTI-LAG & OPTIMIZATION SUITE)
+-- ====================================================================================================
+
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local Terrain = Workspace:FindFirstChildOfClass("Terrain")
+local CoreGui = game:GetService("CoreGui")
+local LocalPlayer = Players.LocalPlayer
+
+local ConfigsModule = {}
+ConfigsModule.__index = ConfigsModule
+
+ConfigsModule.Settings = {
+    AntiLagEnabled = false,
+    Fullbright = false,
+    FPSCap = 60,
+    RemoveTextures = false,
+    PotatoMode = false,
+    NotificationSystem = true
+}
+
+local originalLightingSettings = {
+    Brightness = Lighting.Brightness,
+    ClockTime = Lighting.ClockTime,
+    FogEnd = Lighting.FogEnd,
+    GlobalShadows = Lighting.GlobalShadows,
+    OutdoorAmbient = Lighting.OutdoorAmbient
+}
+
+local function SendNotification(title, text)
+    if not ConfigsModule.Settings.NotificationSystem then return end
+    pcall(function()
+        print("[Eclipse Configs & Misc] " .. title .. ": " .. text)
+    end)
+end
+
+-- [SUBSISTEMA DE OPTIMIZACIÓN Y ANTI-LAG PROFUNDO]
+local function ApplyAntiLagOptimization(state)
+    pcall(function()
+        ConfigsModule.Settings.AntiLagEnabled = state
+        
+        if state then
+            SendNotification("Optimización", "Aplicando modo Anti-Lag extremo...")
+            
+            -- Desactivar sombras globales y niebla pesada
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 999999
+            
+            if Terrain then
+                Terrain.WaterWaveSize = 0
+                Terrain.WaterWaveSpeed = 0
+                Terrain.WaterTransparency = 0
+                Terrain.WaterReflectance = 0
+            end
+            
+            -- Barrido de materiales y texturas pesadas en Workspace
+            for _, descendant in ipairs(Workspace:GetDescendants()) do
+                if descendant:IsA("BasePart") then
+                    descendant.Material = Enum.Material.SmoothPlastic
+                    descendant.Reflectance = 0
+                elseif descendant:IsA("ParticleEmitter") or descendant:IsA("Trail") or descendant:IsA("Fire") or descendant:IsA("Smoke") or descendant:IsA("Sparkles") then
+                    descendant.Enabled = false
+                elseif descendant:IsA("PostEffect") then
+                    descendant.Enabled = false
+                end
+            end
+            
+            setfpscap(240) -- Desbloquear o estabilizar FPS altos
+        else
+            SendNotification("Optimización", "Restaurando ajustes gráficos originales...")
+            Lighting.GlobalShadows = originalLightingSettings.GlobalShadows
+            Lighting.FogEnd = originalLightingSettings.FogEnd
+            setfpscap(60)
+        end
+    end)
+end
+
+-- [SUBSISTEMA DE VISIÓN NOCTURNA / FULLBRIGHT]
+local function ToggleFullbright(state)
+    pcall(function()
+        ConfigsModule.Settings.Fullbright = state
+        if state then
+            Lighting.Brightness = 2
+            Lighting.ClockTime = 14
+            Lighting.GlobalShadows = false
+            Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
+        else
+            Lighting.Brightness = originalLightingSettings.Brightness
+            Lighting.ClockTime = originalLightingSettings.ClockTime
+            Lighting.GlobalShadows = originalLightingSettings.GlobalShadows
+            Lighting.OutdoorAmbient = originalLightingSettings.OutdoorAmbient
+        end
+    end)
+end
+
+-- [CONSTRUCTOR DE LA PESTAÑA EN EL GUI PRINCIPAL]
+function ConfigsModule.Init(tabsContainer)
+    for _, child in ipairs(tabsContainer:GetChildren()) do
+        child:Destroy()
+    end
+
+    local SectionTitle = Instance.new("TextLabel")
+    SectionTitle.Size = UDim2.new(1, -20, 0, 30)
+    SectionTitle.Position = UDim2.new(0, 10, 0, 10)
+    SectionTitle.BackgroundTransparency = 1
+    SectionTitle.Text = "CONFIGURATIONS & OPTIMIZATION (ANTI-LAG)"
+    SectionTitle.TextColor3 = Color3.fromRGB(220, 130, 255)
+    SectionTitle.TextSize = 14
+    SectionTitle.Font = Enum.Font.GothamBold
+    SectionTitle.TextXAlignment = Enum.TextXAlignment.Left
+    SectionTitle.Parent = tabsContainer
+
+    -- Botón Anti-Lag Principal
+    local antiLagBtn = Instance.new("TextButton")
+    antiLagBtn.Size = UDim2.new(1, -20, 0, 45)
+    antiLagBtn.Position = UDim2.new(0, 10, 0, 50)
+    antiLagBtn.BackgroundColor3 = ConfigsModule.Settings.AntiLagEnabled and Color3.fromRGB(75, 30, 130) or Color3.fromRGB(30, 20, 45)
+    antiLagBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    antiLagBtn.TextSize = 13
+    antiLagBtn.Font = Enum.Font.GothamBold
+    antiLagBtn.Text = ConfigsModule.Settings.AntiLagEnabled and "Modo Anti-Lag: [ ACTIVADO ]" or "Modo Anti-Lag: [ DESACTIVADO ]"
+    antiLagBtn.Parent = tabsContainer
+
+    local alCorner = Instance.new("UICorner")
+    alCorner.CornerRadius = UDim.new(0, 8)
+    alCorner.Parent = antiLagBtn
+
+    antiLagBtn.MouseButton1Click:Connect(function()
+        local newState = not ConfigsModule.Settings.AntiLagEnabled
+        ApplyAntiLagOptimization(newState)
+        antiLagBtn.Text = newState and "Modo Anti-Lag: [ ACTIVADO ]" or "Modo Anti-Lag: [ DESACTIVADO ]"
+        antiLagBtn.BackgroundColor3 = newState and Color3.fromRGB(75, 30, 130) or Color3.fromRGB(30, 20, 45)
+    end)
+
+    -- Botón de Fullbright (Visión Clara)
+    local fbBtn = Instance.new("TextButton")
+    fbBtn.Size = UDim2.new(1, -20, 0, 45)
+    fbBtn.Position = UDim2.new(0, 10, 0, 105)
+    fbBtn.BackgroundColor3 = ConfigsModule.Settings.Fullbright and Color3.fromRGB(75, 30, 130) or Color3.fromRGB(30, 20, 45)
+    fbBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    fbBtn.TextSize = 13
+    fbBtn.Font = Enum.Font.GothamBold
+    fbBtn.Text = ConfigsModule.Settings.Fullbright and "Fullbright (Visión Nocturna): [ ACTIVADO ]" or "Fullbright (Visión Nocturna): [ DESACTIVADO ]"
+    fbBtn.Parent = tabsContainer
+
+    local fbCorner = Instance.new("UICorner")
+    fbCorner.CornerRadius = UDim.new(0, 8)
+    fbCorner.Parent = fbBtn
+
+    fbBtn.MouseButton1Click:Connect(function()
+        local newState = not ConfigsModule.Settings.Fullbright
+        ToggleFullbright(newState)
+        fbBtn.Text = newState and "Fullbright (Visión Nocturna): [ ACTIVADO ]" or "Fullbright (Visión Nocturna): [ DESACTIVADO ]"
+        fbBtn.BackgroundColor3 = newState and Color3.fromRGB(75, 30, 130) or Color3.fromRGB(30, 20, 45)
+    end)
+
+    -- Panel Informativo de Rendimiento
+    local PerfFrame = Instance.new("Frame")
+    PerfFrame.Size = UDim2.new(1, -20, 0, 100)
+    PerfFrame.Position = UDim2.new(0, 10, 0, 165)
+    PerfFrame.BackgroundColor3 = Color3.fromRGB(18, 16, 26)
+    PerfFrame.BorderSizePixel = 0
+    PerfFrame.Parent = tabsContainer
+
+    local pfCorner = Instance.new("UICorner")
+    pfCorner.CornerRadius = UDim.new(0, 8)
+    pfCorner.Parent = PerfFrame
+
+    local perfLabel = Instance.new("TextLabel")
+    perfLabel.Size = UDim2.new(1, -20, 1, 0)
+    perfLabel.Position = UDim2.new(0, 10, 0, 0)
+    perfLabel.BackgroundTransparency = 1
+    perfLabel.TextColor3 = Color3.fromRGB(200, 200, 220)
+    perfLabel.TextSize = 12
+    perfLabel.Font = Enum.Font.Code
+    perfLabel.TextXAlignment = Enum.TextXAlignment.Left
+    perfLabel.TextYAlignment = Enum.TextYAlignment.Top
+    perfLabel.RichText = true
+    perfLabel.Text = string.format(
+        "<b>[ESTADO DE RENDIMIENTO]</b>\n\n" ..
+        "• Optimizador Gráfico: <font color='#50ffd2'>Listo</font>\n" ..
+        "• Tasa de FPS: <font color='#a250ff'>Estable</font>\n" ..
+        "• Materiales: <font color='#50ff80'>Simplificados</font>"
+    )
+    perfLabel.Parent = PerfFrame
+end
+
+function ConfigsModule.Destroy()
+    ApplyAntiLagOptimization(false)
+    ToggleFullbright(false)
+end
+
+return ConfigsModule
